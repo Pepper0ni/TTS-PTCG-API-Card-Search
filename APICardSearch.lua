@@ -120,21 +120,12 @@ function makeCards(r,color)
   lastSearch=nil
  else
   local decoded=json.parse(string.gsub(r.text,"\\u0026","&"))
-  log(type(decoded.count))
   if decoded.count<tonumber(pageSize) then lastSearch=false end
   local spawnPos=self.positionToWorld({0,5.5,0})
   local spawnRot=self.getRotation()
-  local curCard=1
-  local deckData=
-   {Name="Deck",
-   Transform={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1},
-   DeckIDs={},
-   CustomDeck={},
-   ContainedObjects={}
-   }
-  for a=1,#decoded.data do
-   local cardData=decoded.data[a]
-   local DeckID=999+curCard
+  local spawnData={}
+  if decoded.count==1 then
+   local cardData=decoded.data[1]
    local customData={
     FaceURL=cardData.images.large.."?count="..cardData.number or"",
     BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
@@ -142,20 +133,50 @@ function makeCards(r,color)
     NumHeight=1,
     BackIsHidden=true
    }
-   deckData.DeckIDs[curCard]=DeckID*100
-   deckData.CustomDeck[DeckID]=customData
-   deckData.ContainedObjects[curCard]={
-    Name="CardCustom",
+   spawnData=
+   {Name="CardCustom",
+    Transform={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1},
     Nickname=cardData.name,
     Description=cardData.set.name.." #"..cardData.number,
     GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
     Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
-    CardID=DeckID*100,
-    CustomDeck={[DeckID]=customData}
+    CardID=100000,
+    CustomDeck={[1000]=customData}
    }
-   curCard=curCard+1
+  else
+   local curCard=1
+   spawnData=
+    {Name="Deck",
+    Transform={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1},
+    DeckIDs={},
+    CustomDeck={},
+    ContainedObjects={}
+   }
+   for a=1,#decoded.data do
+    local cardData=decoded.data[a]
+    local DeckID=999+curCard
+    local customData={
+     FaceURL=cardData.images.large.."?count="..cardData.number or"",
+     BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
+     NumWidth=1,
+     NumHeight=1,
+     BackIsHidden=true
+    }
+    spawnData.DeckIDs[curCard]=DeckID*100
+    spawnData.CustomDeck[DeckID]=customData
+    spawnData.ContainedObjects[curCard]={
+     Name="CardCustom",
+     Nickname=cardData.name,
+     Description=cardData.set.name.." #"..cardData.number,
+     GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
+     Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
+     CardID=DeckID*100,
+     CustomDeck={[DeckID]=customData}
+    }
+    curCard=curCard+1
+   end
   end
-  spawnObjectData({data=deckData})
+  spawnObjectData({data=spawnData})
  end
 end
 

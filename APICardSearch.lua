@@ -124,6 +124,7 @@ function makeCards(r,color)
   local spawnPos=self.positionToWorld({0,5.5,0})
   local spawnRot=self.getRotation()
   local spawnData={}
+  local spawnLoc={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1}
   if decoded.count==1 then
    local cardData=decoded.data[1]
    local customData={
@@ -135,7 +136,7 @@ function makeCards(r,color)
    }
    spawnData=
    {Name="CardCustom",
-    Transform={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1},
+    Transform=spawnLoc,
     Nickname=cardData.name,
     Description=cardData.set.name.." #"..cardData.number,
     GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
@@ -144,17 +145,16 @@ function makeCards(r,color)
     CustomDeck={[1000]=customData}
    }
   else
-   local curCard=1
    spawnData=
     {Name="Deck",
-    Transform={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1},
+    Transform=spawnLoc,
     DeckIDs={},
     CustomDeck={},
     ContainedObjects={}
    }
    for a=1,#decoded.data do
     local cardData=decoded.data[a]
-    local DeckID=999+curCard
+    local DeckID=999+a
     local customData={
      FaceURL=cardData.images.large.."?count="..cardData.number or"",
      BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
@@ -162,10 +162,12 @@ function makeCards(r,color)
      NumHeight=1,
      BackIsHidden=true
     }
-    spawnData.DeckIDs[curCard]=DeckID*100
+    spawnData.DeckIDs[a]=DeckID*100
     spawnData.CustomDeck[DeckID]=customData
-    spawnData.ContainedObjects[curCard]={
+    spawnData.ContainedObjects[a]={
      Name="CardCustom",
+     GUID=tostring(123456+a),
+     Transform=spawnLoc,
      Nickname=cardData.name,
      Description=cardData.set.name.." #"..cardData.number,
      GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
@@ -173,7 +175,7 @@ function makeCards(r,color)
      CardID=DeckID*100,
      CustomDeck={[DeckID]=customData}
     }
-    curCard=curCard+1
+    a=a+1
    end
   end
   spawnObjectData({data=spawnData})
@@ -299,4 +301,11 @@ natDexReplace={
  [433]="03575",
  [478]="03625",
  [867]="05635",
+ [899]="02345",
+ [900]="01237",
+ [901]="02175",
+ [902]="05505",
+ [903]="02157",
+ [904]="02115",
+ [902]="02157",
 }

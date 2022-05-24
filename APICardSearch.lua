@@ -134,19 +134,21 @@ function makeCards(r,color)
     NumHeight=1,
     BackIsHidden=true
    }
-   spawnData=
-   {Name="CardCustom",
+   local rar=""
+   if cardData.rarity then
+    rar=" "..string.gsub(cardData.rarity,"[^%u]","")
+   end
+   spawnData={Name="CardCustom",
     Transform=spawnLoc,
     Nickname=cardData.name,
-    Description=cardData.set.name.." #"..cardData.number,
+    Description=cardData.set.name.." #"..cardData.number..rar,
     GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
     Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
     CardID=100000,
     CustomDeck={[1000]=customData}
    }
   else
-   spawnData=
-    {Name="Deck",
+   spawnData={Name="Deck",
     Transform=spawnLoc,
     DeckIDs={},
     CustomDeck={},
@@ -164,12 +166,16 @@ function makeCards(r,color)
     }
     spawnData.DeckIDs[a]=DeckID*100
     spawnData.CustomDeck[DeckID]=customData
+    local rar=""
+    if cardData.rarity then
+     rar=" "..string.gsub(cardData.rarity,"[^%u]","")
+    end
     spawnData.ContainedObjects[a]={
      Name="CardCustom",
      GUID=tostring(123456+a),
      Transform=spawnLoc,
      Nickname=cardData.name,
-     Description=cardData.set.name.." #"..cardData.number,
+     Description=cardData.set.name.." #"..cardData.number..rar,
      GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
      Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
      CardID=DeckID*100,

@@ -1,9 +1,15 @@
 lastSearchTime=os.time()
+lastSearchText=false
+lastSearchCount=false
+lastSearchTotal=false
+lastSearchFormat=false
+curPos=0
+curStart=1
+lock=false
+pageSizes={15,30,60,120,240}
+scope=""
 
 function onLoad(state)
- pageSize=state or"30"
- setUpContextMenu()
- curPage=1
  local selfScale=self.getScale()
  local params={
  function_owner=self,
@@ -19,59 +25,70 @@ function onLoad(state)
  scale={1/selfScale.x,1/selfScale.y,1/selfScale.z},
  }
  self.createInput(params)
+ if not state or state==""then
+  pageSize=30
+ else
+  state=json.parse(state)
+  pageSize=state.pageSize or 30
+  scope=state.scope or""
+  self.editInput({index=0,value=state.value or""})
+  lastSearchText=state.text or false
+  lastSearchCount=state.count or false
+  lastSearchTotal=state.total or false
+  lastSearchFormat=state.format or false
+  curPos=state.pos or 0
+ end
+ setUpContextMenu()
+ setUpButtons()
+end
 
+function setUpButtons()
+ local selfScale=self.getScale()
  local params={
  function_owner=self,
- label='Strict',
- tooltip="Toggles Strict search, searching only for the exact name. Highly reccomended when searching for N.",
  font_size=180,
- width=750,
+ width=650,
  height=220,
  scale={1/selfScale.x,1/selfScale.y,1/selfScale.z},
- position={0.6,0,1.5},
- click_function='toggleStrict'
  }
- if not strict then params.color={1,0,0} else params.color={0,1,0} end
- self.createButton(params)
+ if scope=="strict" then params.color={0,1,0}else params.color={1,0,0}end
+ butWrapper(params,{0.7,0,1.5},'Strict',"Toggles Strict search, searching only for the exact name.",'toggleStrict')
+
+ if scope=="fuzzy" then params.color={0,1,0}else params.color={1,0,0}end
+ butWrapper(params,{-0.35175,0,1.5},'Fuzzy',"Toggles Fuzzy Search, searching for anything containing the input.",'toggleFuzzy')
+
  params.color={1,1,1}
-
- params.position[1]=-0.6
- params.label='é'
- params.tooltip="Place an é"
- params.click_function='placeE'
- self.createButton(params)
-
- params.position={0,0,1.8}
+ params.width=200
+ butWrapper(params,{-1.035,0,1.5},'é',"Place an é",'placeE')
  params.width=1500
- params.label='Search Standard'
- params.tooltip="Gets matching cards from Standard"
- params.click_function='searchStandard'
- self.createButton(params)
+ butWrapper(params,{0,0,1.8},'Search Standard',"Gets matching cards from Standard",'searchStandard')
+ butWrapper(params,{0,0,2.1},'Search Expanded',"Gets matching cards from Expanded",'searchExpanded')
+ butWrapper(params,{0,0,2.4},'Search All Cards',"Gets all matching cards.",'searchAll')
+ if lastSearchCount then
+  butWrapper(params,{0,0,2.7},"Get "..tostring(math.min(pageSize,lastSearchTotal-lastSearchCount)).." More","Get the next set of results.",'nextPage')
+ end
+end
 
- params.position[3]=2.1
- params.label='Search Expanded'
- params.tooltip="Gets matching cards from Expanded"
- params.click_function='searchExpanded'
- self.createButton(params)
-
- params.position[3]=2.4
- params.label='Search All Cards'
- params.tooltip="Gets all matching cards."
- params.click_function='searchAll'
- self.createButton(params)
-
- params.position[3]=2.7
- params.label='Get Next Page'
- params.tooltip="Get the next set of results, if any."
- params.click_function='nextPage'
+function butWrapper(params,pos,label,tool,func)
+ params.position=pos
+ params.label=label
+ params.tooltip=tool
+ params.click_function=func
  self.createButton(params)
 end
 
 function toggleStrict()
- if not strict then strict=true else strict=false end
- local color={0,1,0}
- if not strict then color={1,0,0} end
- self.editButton({index=0,color=color})
+ if scope=="strict"then scope=""else scope="strict"end
+ self.clearButtons()
+ setUpButtons()
+ saveData()
+end
+
+function toggleFuzzy()
+ if scope=="fuzzy"then scope=""else scope="fuzzy"end
+ self.clearButtons()
+ setUpButtons()
+ saveData()
 end
 
 function placeE()
@@ -79,36 +96,47 @@ function placeE()
 end
 
 function searchStandard(obj,color,alt)
- search(' legalities.standard:Legal',color,1)
+ search(' legalities.standard:Legal',color,self.getInputs()[1].value)
 end
 
 function searchExpanded(obj,color,alt)
- search(' legalities.expanded:Legal',color,1)
+ search(' legalities.expanded:Legal',color,self.getInputs()[1].value)
 end
 
 function searchAll(obj,color,alt)
- search("",color,1)
+ search("",color,self.getInputs()[1].value)
 end
 
 function nextPage(obj,color,alt)
- if lastSearch==false then
+ if lastSearchCount==false then
   broadcastToColor("No more results. Please start a new search",color,{1,0,0})
- elseif not lastSearch then
-  broadcastToColor("Please start a search before getting a new page.",color,{1,0,0})
+  self.clearButtons()
+  setUpButtons()
  else
-  search(lastSearch,color,curPage)
+  getCards(lastSearchFormat,color,lastSearchText)
  end
 end
 
-function search(formatText,color,page)
+function search(formatText,color,searchText)
+ resetSearch()
+ getCards(formatText,color,searchText)
+end
+
+function getCards(formatText,color,searchText)
  if os.difftime(os.time(),lastSearchTime)<1 then broadcastToColor("You can't search that fast.",color,{1,0,0})return end
- lastSearch=formatText
- curPage=page+1
+ if lock then broadcastToColor("Already Searching...",color,{1,0,0})return end
+ if searchText==""then broadcastToColor("Please enter a search term.",color,{1,0,0})return end
+ lock=true
  decoded={}
  local strictText=""
- if strict then strictText="!"end
- r=WebRequest.get('https://api.pokemontcg.io/v2/cards?q='..strictText..'name:"'..self.getInputs()[1].value..'"'..formatText..'&page='..page..'&pageSize='..pageSize.."&orderBy=set.releaseDate",function()makeCards(r,color)end)
+ local fuzzyText=""
+ if scope=="strict"then strictText="!"elseif scope=="fuzzy"then fuzzyText="*"end
+ r=WebRequest.get('https://api.pokemontcg.io/v2/cards?q='..strictText..'name:"'..fuzzyText..searchText..fuzzyText..'"'..formatText..'&page='..tostring(curPos/pageSize+1)..'&pageSize='..tostring(pageSize).."&orderBy=set.releaseDate&select=id,name,images,number,rarity,set,supertype,subtypes,types,nationalPokedexNumbers",function()makeCards(r,color)end)
+ lastSearchFormat=formatText
+ lastSearchText=searchText
+ curPos=curPos+pageSize
  lastSearchTime=os.time()
+ saveData()
 end
 
 function makeCards(r,color)
@@ -117,36 +145,16 @@ function makeCards(r,color)
   log(r.text)
   log(r.response_code)
   broadcastToColor("Error: "..tostring(r.response_code),color,{1,0,0})
-  lastSearch=nil
+  resetSearch()
  else
   local decoded=json.parse(string.gsub(r.text,"\\u0026","&"))
-  if decoded.count<tonumber(pageSize) then lastSearch=false end
   local spawnPos=self.positionToWorld({0,5.5,0})
   local spawnRot=self.getRotation()
   local spawnData={}
   local spawnLoc={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1}
   if decoded.count==1 then
    local cardData=decoded.data[1]
-   local customData={
-    FaceURL=cardData.images.large.."?count="..cardData.number or"",
-    BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
-    NumWidth=1,
-    NumHeight=1,
-    BackIsHidden=true
-   }
-   local rar=""
-   if cardData.rarity then
-    rar=" "..string.gsub(cardData.rarity,"[^%u]","")
-   end
-   spawnData={Name="CardCustom",
-    Transform=spawnLoc,
-    Nickname=cardData.name,
-    Description=cardData.set.name.." #"..cardData.number..rar,
-    GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
-    Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
-    CardID=100000,
-    CustomDeck={[1000]=customData}
-   }
+   spawnData=getCardData(spawnLoc,cardData,getCustomData(cardData),100000,1000)
   else
    spawnData={Name="Deck",
     Transform=spawnLoc,
@@ -157,51 +165,98 @@ function makeCards(r,color)
    for a=1,#decoded.data do
     local cardData=decoded.data[a]
     local DeckID=999+a
-    local customData={
-     FaceURL=cardData.images.large.."?count="..cardData.number or"",
-     BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
-     NumWidth=1,
-     NumHeight=1,
-     BackIsHidden=true
-    }
+    local customData=getCustomData(cardData)
     spawnData.DeckIDs[a]=DeckID*100
     spawnData.CustomDeck[DeckID]=customData
-    local rar=""
-    if cardData.rarity then
-     rar=" "..string.gsub(cardData.rarity,"[^%u]","")
-    end
-    spawnData.ContainedObjects[a]={
-     Name="CardCustom",
-     GUID=tostring(123456+a),
-     Transform=spawnLoc,
-     Nickname=cardData.name,
-     Description=cardData.set.name.." #"..cardData.number..rar,
-     GMNotes=enumTypes(cardData.supertype,cardData.subtypes)..convertNatDex(cardData.nationalPokedexNumbers)or"",
-     Memo=string.gsub(cardData.set.releaseDate,"/","")..string.gsub(cardData.number,"[^%d]",""),
-     CardID=DeckID*100,
-     CustomDeck={[DeckID]=customData}
-    }
-    a=a+1
+    spawnData.ContainedObjects[a]=getCardData(spawnLoc,cardData,customData,DeckID*100,DeckID)
+    spawnData.ContainedObjects[a]["GUID"]=tostring(123456+a)
    end
   end
   spawnObjectData({data=spawnData})
- end
-end
-
-function enumTypes(Type,subTypes)
- local enum=TypeNums[Type]or 0
- if subTypes then
-  for c=1,#subTypes do
-   enum=enum+(TypeNums[subTypes[c]]or 0)
+  local curCount=(lastSearchCount or 0)+decoded.count
+  if curCount>=decoded.totalCount then
+   resetSearch()
+  else
+   lastSearchCount=curCount
+   lastSearchTotal=decoded.totalCount
+   self.clearButtons()
+   setUpButtons()
   end
  end
- return tostring(enum)
+ lock=false
+ saveData()
+end
+
+function getCardData(spawnLoc,cardData,customData,cardID,deckID)
+ local cardType=enumTable(enumTable(subTypeNums[cardData.supertype]or 0,cardData.subtypes,monSubTypeNums,0,0),cardData.subtypes,subTypeNums,0,0)
+ local monType=enumTable(0,cardData.types,TypeNums,10,200)
+ if monType==0 then monType=500 end
+ local rar=""
+ if cardData.rarity then
+  rar=" "..string.gsub(cardData.rarity,"[^%u]","")
+ end
+ return{Name="CardCustom",
+ Transform=spawnLoc,
+ Nickname=cardData.name,
+ Description=cardData.set.name.." #"..cardData.number..rar,
+ GMNotes=tostring(cardType)..convertNatDex(cardData.nationalPokedexNumbers)or"",
+ Memo=string.gsub(cardData.set.releaseDate,"/","")..buildCardNumber(cardData.number),
+ CardID=cardID,
+ CustomDeck={[deckID]=customData},
+ LuaScriptState=tostring(monType)
+}
+end
+
+function getCustomData(cardData)
+ return{FaceURL=cardData.images.large.."?count="..cardData.number or"",
+  BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
+  NumWidth=1,
+  NumHeight=1,
+  BackIsHidden=true
+ }
+end
+
+function buildCardNumber(cardNum)
+ local numOnly=string.gsub(cardNum,"[^%d]","")
+ if numOnly!=cardNum then
+  local finalNum=(tonumber(numOnly)or 0)+500
+  for c in cardNum:gmatch"[^%d]" do
+   if c=="?"then c="}"end
+   if c=="!"then c="{"end
+   finalNum=string.byte(c)-65+finalNum
+  end
+  cardNum=tostring(finalNum)
+ end
+ while #cardNum<3 do cardNum="0"..cardNum end
+ return cardNum
+end
+
+function resetSearch()
+ lastSearchCount=false
+ lastSearchText=false
+ lastSearchTotal=false
+ lastSearchFormat=false
+ curPos=0
+ self.clearButtons()
+ setUpButtons()
+end
+
+function enumTable(enum,input,values,multi,extramulti)
+ if input then
+  for c=1,#input do
+   if values[input[c]]then
+    enum=enum+values[input[c]]*(1+multi)
+    if multi==0 then enum=enum+extramulti else multi=0 end
+   end
+  end
+ end
+ return enum
 end
 
 function convertNatDex(dexNums)
  if dexNums then dexNum=dexNums[1]else return "00000" end
  if natDexReplace[dexNum] then return natDexReplace[dexNum] end
- dexNum = tostring(dexNum*10)
+ dexNum=tostring(dexNum*10)
  while #dexNum<5 do dexNum="0"..dexNum end
  return dexNum
 end
@@ -211,41 +266,57 @@ function processReturn(obj,color,value,selected)
  if subedValue!=value then
   Wait.frames(function()searchAll(obj,color,false)end,1)
  end
+ saveData()
  return subedValue
 end
 
 function setUpContextMenu()
- if pageSize!="20" then
-  self.addContextMenuItem("Page Size: 20",function()changePageSize("20")end)
+ for c=1,#pageSizes do
+  if pageSize!=pageSizes[c]then
+   self.addContextMenuItem("Page Size: "..tostring(pageSizes[c]),function()changePageSize(pageSizes[c])end)
+  end
  end
- if pageSize!="30" then
-  self.addContextMenuItem("Page Size: 30",function()changePageSize("30")end)
- end
- if pageSize!="50" then
-  self.addContextMenuItem("Page Size: 50",function()changePageSize("50")end)
- end
- if pageSize!="100" then
-  self.addContextMenuItem("Page Size: 100",function()changePageSize("100")end)
- end
- if pageSize!="250" then
-  self.addContextMenuItem("Page Size: 250",function()changePageSize("250")end)
- end
+ self.addContextMenuItem("Release Lock",function()lock=false end)
 end
 
 function changePageSize(size)
  pageSize=size
- self.script_state=size
+ saveData()
  self.clearContextMenu()
  setUpContextMenu()
+ self.clearButtons()
+ setUpButtons()
 end
 
-TypeNums={
+function saveData()
+ self.script_state=json.serialize({pageSize=pageSize,scope=scope,value=self.getInputs()[1].value,text=lastSearchText,total=lastSearchTotal,count=lastSearchCount,format=lastSearchFormat,pos=curPos})
+end
+
+subTypeNums={
  ["Trainer"]=3,
  ["Energy"]=7,
  ["Supporter"]=1,
  ["Stadium"]=2,
  ["Pokémon Tool"]=3,
+ ["Technical Machine"]=3,
  ["Special"]=1,
+}
+
+TypeNums={
+ Grass=1,
+ Fire=2,
+ Water=3,
+ Lightning=4,
+ Psychic=5,
+ Fighting=6,
+ Darkness=7,
+ Metal=8,
+ Fairy=9,
+ Dragon=10,
+ Colorless=11,
+}
+
+monSubTypeNums={
  ["Level-Up"]=1,
 }
 

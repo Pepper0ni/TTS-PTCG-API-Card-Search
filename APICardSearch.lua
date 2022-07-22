@@ -10,19 +10,18 @@ pageSizes={15,30,60,120,240}
 scope=""
 
 function onLoad(state)
- local selfScale=self.getScale()
  local params={
  function_owner=self,
  position={0,0,1.2},
  tooltip="Enter the term to search here.",
  label='Enter Card Name',
- font_size=180,
+ font_size=197,
  width=1500,
  height=220,
  alignment=3,
  input_function="processReturn",
  font_color={0,0,0},
- scale={1/selfScale.x,1/selfScale.y,1/selfScale.z},
+ scale={0.75,1,0.5},
  }
  self.createInput(params)
  if not state or state==""then
@@ -43,13 +42,12 @@ function onLoad(state)
 end
 
 function setUpButtons()
- local selfScale=self.getScale()
  local params={
  function_owner=self,
- font_size=180,
+ font_size=197,
  width=650,
  height=220,
- scale={1/selfScale.x,1/selfScale.y,1/selfScale.z},
+ scale={0.75,1,0.5},
  }
  if scope=="strict" then params.color={0,1,0}else params.color={1,0,0}end
  butWrapper(params,{0.7,0,1.5},'Strict',"Toggles Strict search, searching only for the exact name.",'toggleStrict')

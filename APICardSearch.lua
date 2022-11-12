@@ -186,7 +186,7 @@ function makeCards(r,color)
 end
 
 function getCardData(spawnLoc,cardData,customData,cardID,deckID)
- local cardType=enumTable(subTypeNums[cardData.supertype]or 0,cardData.subtypes,subTypeNums,0,0)
+ local cardType=getSubTypeNum(cardData.subtypes)or subTypeNums[cardData.supertype]or 0
  local monType=enumTable(0,cardData.types,TypeNums,10,200)
  if monType==0 then monType=500 end
  local rar=""
@@ -251,6 +251,15 @@ function enumTable(enum,input,values,multi,extramulti)
  return enum
 end
 
+function getSubTypeNum(subTypes)
+ if subTypes then
+  for c=1,#subTypes do
+   if subTypeNums[subTypes[c]]then return subTypeNums[subTypes[c]]end
+  end
+ end
+ return false
+end
+
 function convertNatDex(dexNums,subTypes)
  if dexNums then dexNum=dexNums[1]else return"0000000"end
  if natDexReplace[dexNum] then
@@ -297,12 +306,12 @@ end
 
 subTypeNums={
  ["Trainer"]=3,
- ["Energy"]=7,
- ["Supporter"]=1,
- ["Stadium"]=2,
- ["Pokémon Tool"]=3,
- ["Technical Machine"]=3,
- ["Special"]=1,
+ ["Supporter"]=4,
+ ["Stadium"]=5,
+ ["Pokémon Tool"]=6,
+ ["Technical Machine"]=6,
+ ["Special"]=8,
+ ["Energy"]=9
 }
 
 TypeNums={
@@ -397,5 +406,4 @@ natDexReplace={
  [902]="05505",
  [903]="02157",
  [904]="02115",
- [902]="02157",
 }

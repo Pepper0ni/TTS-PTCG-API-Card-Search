@@ -94,11 +94,11 @@ function placeE()
 end
 
 function searchStandard(obj,color,alt)
- search(' legalities.standard:Legal',color,self.getInputs()[1].value)
+ search('legalities.standard:Legal',color,self.getInputs()[1].value)
 end
 
 function searchExpanded(obj,color,alt)
- search(' legalities.expanded:Legal',color,self.getInputs()[1].value)
+ search('legalities.expanded:Legal',color,self.getInputs()[1].value)
 end
 
 function searchAll(obj,color,alt)
@@ -120,16 +120,34 @@ function search(formatText,color,searchText)
  getCards(formatText,color,searchText)
 end
 
+function processSearchText(searchText,scope,formatText)
+ local fuzzyText=""
+ local quote='"'
+ local encodedText=searchText
+ if scope=="fuzzy"then fuzzyText="*"end
+ if string.match(encodedText,"[&%[%]]")then
+  quote="%22"
+  encodedText=string.gsub(encodedText,"&","%%26")
+  encodedText=string.gsub(encodedText," ","%%20")
+  if formatText!=""then
+   formatText="%20"..formatText
+  end
+ elseif formatText!=""then
+  formatText=" "..formatText
+ end
+ encodedText=string.gsub(encodedText,"%[","\\\[")
+ encodedText=string.gsub(encodedText,"%]","\\\]")
+ return quote..fuzzyText..encodedText..fuzzyText..quote..formatText
+end
+
 function getCards(formatText,color,searchText)
  if os.difftime(os.time(),lastSearchTime)<1 then broadcastToColor("You can't search that fast.",color,{1,0,0})return end
  if lock then broadcastToColor("Already Searching...",color,{1,0,0})return end
  if searchText==""then broadcastToColor("Please enter a search term.",color,{1,0,0})return end
  lock=true
- decoded={}
  local strictText=""
- local fuzzyText=""
- if scope=="strict"then strictText="!"elseif scope=="fuzzy"then fuzzyText="*"end
- r=WebRequest.get('https://api.pokemontcg.io/v2/cards?q='..strictText..'name:"'..fuzzyText..searchText..fuzzyText..'"'..formatText..'&page='..tostring(curPos/pageSize+1)..'&pageSize='..tostring(pageSize).."&orderBy=set.releaseDate&select=id,name,images,number,rarity,set,supertype,subtypes,types,nationalPokedexNumbers",function()makeCards(r,color)end)
+ if scope=="strict"then strictText="!"end
+ r=WebRequest.get('https://api.pokemontcg.io/v2/cards?q='..strictText..'name:'..processSearchText(searchText,scope,formatText)..'&page='..tostring(curPos/pageSize+1)..'&pageSize='..tostring(pageSize).."&orderBy=set.releaseDate&select=id,name,images,number,rarity,set,supertype,subtypes,types,nationalPokedexNumbers",function()makeCards(r,color)end)
  lastSearchFormat=formatText
  lastSearchText=searchText
  curPos=curPos+pageSize
@@ -160,7 +178,7 @@ function makeCards(r,color)
     CustomDeck={},
     ContainedObjects={}
    }
-   for a=1,#decoded.data do
+   for a=1,decoded.count do
     local cardData=decoded.data[a]
     local DeckID=999+a
     local customData=getCustomData(cardData)
@@ -411,4 +429,7 @@ natDexReplace={
  [981]="02035",
  [982]="02065",
  [983]="06255",
+ [1011]="08425",
+ [1018]="08845",
+ [1019]="08426",
 }

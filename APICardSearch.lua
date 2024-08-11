@@ -225,7 +225,7 @@ end
 
 function getCustomData(cardData)
  return{FaceURL=cardData.images.large.."?count="..cardData.number or"",
-  BackURL="http://cloud-3.steamusercontent.com/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
+  BackURL="https://steamusercontent-a.akamaihd.net/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
   NumWidth=1,
   NumHeight=1,
   BackIsHidden=true

@@ -94,7 +94,7 @@ function placeE()
 end
 
 function searchStandard(obj,color,alt)
- search('legalities.standard:Legal',color,self.getInputs()[1].value)
+ search('(regulationMark:"G" OR regulationMark:"H" OR regulationMark:"I")',color,self.getInputs()[1].value)
 end
 
 function searchExpanded(obj,color,alt)

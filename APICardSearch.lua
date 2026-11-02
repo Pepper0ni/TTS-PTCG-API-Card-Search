@@ -121,10 +121,7 @@ function search(formatText,color,searchText)
 end
 
 function processSearchText(searchText,scope,formatText)
- local fuzzyText=""
- local quote='"'
  local encodedText=searchText
- if scope=="fuzzy"then fuzzyText="*"end
  if string.match(encodedText,"[&%[%]]")then
   quote="%22"
   encodedText=string.gsub(encodedText,"&","%%26")
@@ -137,7 +134,7 @@ function processSearchText(searchText,scope,formatText)
  end
  encodedText=string.gsub(encodedText,"%[","\\\[")
  encodedText=string.gsub(encodedText,"%]","\\\]")
- return quote..fuzzyText..encodedText..fuzzyText..quote..formatText
+ return encodedText..formatText
 end
 
 function getCards(formatText,color,searchText)
@@ -146,8 +143,9 @@ function getCards(formatText,color,searchText)
  if searchText==""then broadcastToColor("Please enter a search term.",color,{1,0,0})return end
  lock=true
  local strictText=""
- if scope=="strict"then strictText="!"end
- r=WebRequest.get('https://api.pokemontcg.io/v2/cards?q='..strictText..'name:'..processSearchText(searchText,scope,formatText)..'&page='..tostring(curPos/pageSize+1)..'&pageSize='..tostring(pageSize).."&orderBy=set.releaseDate&select=id,name,images,number,rarity,set,supertype,subtypes,types,nationalPokedexNumbers",function()makeCards(r,color)end)
+ if scope=="strict"then strictText="eq:"end
+     --&page='..tostring(curPos/pageSize+1)..'&pageSize='..tostring(pageSize).."&orderBy=set.releaseDate&select=id,name,images,number,rarity,set,supertype,subtypes,types,nationalPokedexNumbers",function()makeCards(r,color)end)
+ r=WebRequest.get('https://api.tcgdex.net/v2/graphql?={cards(filters:{name:"'..strictText..processSearchText(searchText,scope,formatText)..'"}){name id dexId rarity types suffix category trainerType energyType stage set}}
  lastSearchFormat=formatText
  lastSearchText=searchText
  curPos=curPos+pageSize
@@ -163,13 +161,13 @@ function makeCards(r,color)
   broadcastToColor("Error: "..tostring(r.response_code),color,{1,0,0})
   resetSearch()
  else
-  local decoded=json.parse(string.gsub(r.text,"\\u0026","&"))
+  local decoded=json.parse(string.gsub(r.text,"\\u0026","&")).data.cards
   local spawnPos=self.positionToWorld({0,5.5,0})
   local spawnRot=self.getRotation()
   local spawnData={}
   local spawnLoc={posX=spawnPos[1],posY=spawnPos[2],posZ=spawnPos[3],rotX=spawnRot[1],rotY=spawnRot[2],rotZ=spawnRot[3],scaleX=1,scaleY=1,scaleZ=1}
-  if decoded.count==1 then
-   local cardData=decoded.data[1]
+  if #decoded==1 then
+   local cardData=decoded[1]
    spawnData=getCardData(spawnLoc,cardData,getCustomData(cardData),100000,1000)
   else
    spawnData={Name="Deck",
@@ -204,19 +202,24 @@ function makeCards(r,color)
 end
 
 function getCardData(spawnLoc,cardData,customData,cardID,deckID)
- local cardType=getSubTypeNum(cardData.subtypes)or subTypeNums[cardData.supertype]or 0
+ local cardType=getSubTypeNum(cardData.category,cardData.trainerType,cardData.energyType)
  local monType=enumTable(0,cardData.types,TypeNums,10,200)
+ local number=gsub(cardData.id,"%w+%-","")
  if monType==0 then monType=500 end
  local rar=""
  if cardData.rarity then
-  rar=" "..string.gsub(cardData.rarity,"[^%u]","")
+  if cardData.id=="R"or cardData.id=="G"or cardData.id=="B"then
+   rar=" RGB"
+  else
+   rar=" "..string.gsub(cardData.rarity,"[^%u]","")
+  end
  end
  return{Name="CardCustom",
  Transform=spawnLoc,
  Nickname=cardData.name,
- Description=cardData.set.name.." #"..cardData.number..rar,
- GMNotes=tostring(cardType)..convertNatDex(cardData.nationalPokedexNumbers,cardData.subtypes),
- Memo=string.gsub(cardData.set.releaseDate,"/","")..buildCardNumber(cardData.number),
+ Description=cardData.set.name.." #"..number..rar,
+ GMNotes=tostring(cardType)..convertNatDex(cardData.dexId,cardData.stage,cardData.suffix),
+ Memo=string.gsub(cardData.set.releaseDate,"/","")..buildCardNumber(number),
  CardID=cardID,
  CustomDeck={[deckID]=customData},
  LuaScriptState=tostring(monType)
@@ -224,7 +227,8 @@ function getCardData(spawnLoc,cardData,customData,cardID,deckID)
 end
 
 function getCustomData(cardData)
- return{FaceURL=cardData.images.large.."?count="..cardData.number or"",
+ local number=gsub(cardData.id,"%w+%-","")
+ return{FaceURL=cardData.images.large.."?count="..number or"",
   BackURL="https://steamusercontent-a.akamaihd.net/ugc/809997459557414686/9ABD9158841F1167D295FD1295D7A597E03A7487/",
   NumWidth=1,
   NumHeight=1,
@@ -269,16 +273,15 @@ function enumTable(enum,input,values,multi,extramulti)
  return enum
 end
 
-function getSubTypeNum(subTypes)
- if subTypes then
-  for c=1,#subTypes do
-   if subTypeNums[subTypes[c]]then return subTypeNums[subTypes[c]]end
-  end
- end
- return false
+function getSubTypeNum(category,trainerType,energyType)
+ local subTypeNum=0
+ if category then subTypeNum=categoryNums[category]end
+ if trainerType then subTypeNum=subTypeNum+trainerTypeNums[trainerType]end
+ if energyType then subTypeNum=subTypeNum+energyTypeNums[energyType]end
+ return subTypeNum
 end
 
-function convertNatDex(dexNums,subTypes)
+function convertNatDex(dexNums,stage,suffix)
  if dexNums then dexNum=dexNums[1]else return"0000000"end
  if natDexReplace[dexNum] then
   dexNum=natDexReplace[dexNum]
@@ -286,7 +289,9 @@ function convertNatDex(dexNums,subTypes)
   dexNum=tostring(dexNum*10)
   while #dexNum<5 do dexNum="0"..dexNum end
  end
- local monSubType=tostring(enumTable(0,subTypes,monSubTypeNums,0,0))
+ local monSubType=0
+ if stage then monSubType=stageNums[stage]end
+ if suffix then suffix=monSubType+suffixNums[suffix]end
  while #monSubType<2 do monSubType="0"..monSubType end
  return dexNum..monSubType
 end
@@ -322,14 +327,20 @@ function saveData()
  self.script_state=json.serialize({pageSize=pageSize,scope=scope,value=self.getInputs()[1].value,text=lastSearchText,total=lastSearchTotal,count=lastSearchCount,format=lastSearchFormat,pos=curPos})
 end
 
-subTypeNums={
+trainerTypeNums={
+ ["Supporter"]=1,
+ ["Stadium"]=2,
+ ["Tool"]=3,
+ ["Technical Machine"]=3,
+}
+
+categoryNums={
  ["Trainer"]=3,
- ["Supporter"]=4,
- ["Stadium"]=5,
- ["Pokémon Tool"]=6,
- ["Technical Machine"]=6,
- ["Special"]=8,
  ["Energy"]=9
+}
+
+energyTypeNums={
+ ["Special"]=-1,
 }
 
 TypeNums={
@@ -346,18 +357,22 @@ TypeNums={
  Colorless=11,
 }
 
-monSubTypeNums={
- ["Level-Up"]=1,
- BREAK=2,
- EX=3,
- MEGA=1,
+suffixNums={
+ ex=3,
+ EX=6,
  GX=5,
- ["TAG TEAM"]=1,
- SP=7,
- LEGEND=9,
- V=10,
- VMAX=11,
- VSTAR=12,
+ ["TAG TEAM-GX"]=8,
+ SP=9,
+ LEGEND=10,
+ V=11,
+ VMAX=12,
+ VSTAR=13,
+}
+
+stageNums={
+ MEGA=1,
+ ["LEVEL-UP"]=1,
+ BREAK=2,
 }
 
 natDexReplace={
